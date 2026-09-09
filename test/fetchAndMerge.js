@@ -32,6 +32,58 @@ QUnit.module("Тестируем функцию fetchAndMerge", function() {
         assert.deepEqual(result, expected, "Должно правильно объединять данные с разных URL");
     });
 
+    QUnit.test("Одинаковые значения не должны повторяться", async function(assert) {
+        const urls = [
+            'https://vk.example.com/vkid',
+            'https://mailru.example.com/mailid',
+        ];
+        const expected = {
+            "age": [25],
+            "id": [1, 2],
+        };
+        
+        window.fetch = (url) => {
+            const data = {
+                'https://vk.example.com/vkid': { "id": 1, "age": 25},
+                'https://mailru.example.com/mailid': { "id": 2, "age": 25 },
+            };
+
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve(data[url]),
+            });
+        };
+
+        const result = await fetchAndMergeData(urls);
+        assert.deepEqual(result, expected, "Одинаковые значения не должны повторяться");
+    });
+
+    QUnit.test("Проверка на корректный результат при использовании ключа, совпадающего с унаследованным свойством", async function(assert) {
+        const urls = [
+            'https://vk.example.com/vkid',
+            'https://mailru.example.com/mailid',
+        ];
+        const expected = {
+            "toString": [25, 22],
+            "id": [1, 2],
+        };
+        
+        window.fetch = (url) => {
+            const data = {
+                'https://vk.example.com/vkid': { "id": 1, "toString": 25},
+                'https://mailru.example.com/mailid': { "id": 2, "toString": 22 },
+            };
+
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve(data[url]),
+            });
+        };
+
+        const result = await fetchAndMergeData(urls);
+        assert.deepEqual(result, expected, "Корректная работа");
+    });
+
     QUnit.test("Возвращает пустой объект при пустом массиве URL", async function(assert) {
         const urls = [];
         
@@ -44,6 +96,34 @@ QUnit.module("Тестируем функцию fetchAndMerge", function() {
 
         const result = await fetchAndMergeData(urls);
         assert.deepEqual(result, {}, "Должно правильно обрабатывать пустой массив URL");
+    });
+
+    QUnit.test("Возвращает пустой объект при переданном числе", async function(assert) {
+        const urls = 123;
+        
+        window.fetch = (url) => {
+
+            return Promise.resolve({
+                ok: true,
+            });
+        };
+
+        const result = await fetchAndMergeData(urls);
+        assert.deepEqual(result, {}, "Должно правильно обрабатывать некорректные входные данные");
+    });
+
+    QUnit.test("Возвращает пустой объект при переданной строке", async function(assert) {
+        const urls = "123";
+        
+        window.fetch = (url) => {
+
+            return Promise.resolve({
+                ok: true,
+            });
+        };
+
+        const result = await fetchAndMergeData(urls);
+        assert.deepEqual(result, {}, "Должно правильно обрабатывать некорректные входные данные");
     });
 
     QUnit.test("Работает правильно при ошибках fetch", async function(assert) {
@@ -65,15 +145,45 @@ QUnit.module("Тестируем функцию fetchAndMerge", function() {
         ];
 
         window.fetch = (url) => {
-
             return Promise.resolve({
                 ok: false,
+                json: () => Promise.resolve({id: 123})
             });
         };
+
         const result = await fetchAndMergeData(urls);
+
         assert.deepEqual(result, {}, "Должно возвращать пустой объект при ошибке fetch");
     });
 
+    QUnit.test("Возвращает пустой объект при смеси успешных и неуспешных запросов", async function(assert) {
+        const urls = [
+            'https://vk.example.com/mailru',
+            'https://vk.example.com/byte',
+        ];
 
+        window.fetch = (url) => {
+            if (url === urls[0]) {
+                return Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve({
+                        id: 1,
+                        name: "Олег",
+                    }),
+                });
+            }
+
+            return Promise.resolve({
+                ok: false,
+                json: () => Promise.resolve({
+                    id: 2,
+                    name: "Мария",
+                }),
+            });
+        };
+
+        const result = await fetchAndMergeData(urls);
+
+        assert.deepEqual(result, {}, "Если хотя бы один запрос неуспешен, должен вернуться пустой объект");
+    });
 });
-
