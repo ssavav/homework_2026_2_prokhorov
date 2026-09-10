@@ -84,9 +84,32 @@ QUnit.module("Тестируем функцию fetchAndMerge", function() {
         assert.deepEqual(result, expected, "Корректная работа");
     });
 
+    QUnit.test("Ключ __proto__ сохраняется и не меняет прототип результата", async function(assert) {
+        const urls = [
+            'https://vk.example.com/vkid',
+            'https://mailru.example.com/mailid',
+        ];
+
+        window.fetch = (url) => {
+            const data = {
+                'https://vk.example.com/vkid': '{"__proto__":"value","id":1}',
+                'https://mailru.example.com/mailid': '{"__proto__":"other","id":2}',
+            };
+
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve(JSON.parse(data[url])),
+            });
+        };
+
+        const result = await fetchAndMergeData(urls);
+
+        assert.deepEqual(Object.keys(result), ["__proto__", "id"], "Ключ __proto__ должен быть собственным свойством");
+    });
+
     QUnit.test("Возвращает пустой объект при пустом массиве URL", async function(assert) {
         const urls = [];
-        
+
         window.fetch = (url) => {
 
             return Promise.resolve({
@@ -98,32 +121,50 @@ QUnit.module("Тестируем функцию fetchAndMerge", function() {
         assert.deepEqual(result, {}, "Должно правильно обрабатывать пустой массив URL");
     });
 
-    QUnit.test("Возвращает пустой объект при переданном числе", async function(assert) {
-        const urls = 123;
-        
-        window.fetch = (url) => {
+    const createMockFetch = () => {
+        const spy = (url) => {
+            spy.calls.push(url);
 
             return Promise.resolve({
                 ok: true,
+                json: () => Promise.resolve({ id: 1 }),
             });
         };
+        spy.calls = [];
 
-        const result = await fetchAndMergeData(urls);
+        return spy;
+    };
+
+    QUnit.test("Возвращает пустой объект при переданном числе", async function(assert) {
+        window.fetch = createMockFetch();
+
+        const result = await fetchAndMergeData(123);
         assert.deepEqual(result, {}, "Должно правильно обрабатывать некорректные входные данные");
+        assert.deepEqual(window.fetch.calls, [], "fetch не должен вызываться");
     });
 
     QUnit.test("Возвращает пустой объект при переданной строке", async function(assert) {
-        const urls = "123";
-        
-        window.fetch = (url) => {
+        window.fetch = createMockFetch();
 
-            return Promise.resolve({
-                ok: true,
-            });
-        };
-
-        const result = await fetchAndMergeData(urls);
+        const result = await fetchAndMergeData("abc");
         assert.deepEqual(result, {}, "Должно правильно обрабатывать некорректные входные данные");
+        assert.deepEqual(window.fetch.calls, [], "fetch не должен вызываться для отдельных символов строки");
+    });
+
+    QUnit.test("Возвращает пустой объект при переданном null", async function(assert) {
+        window.fetch = createMockFetch();
+
+        const result = await fetchAndMergeData(null);
+        assert.deepEqual(result, {}, "Должно правильно обрабатывать некорректные входные данные");
+        assert.deepEqual(window.fetch.calls, [], "fetch не должен вызываться");
+    });
+
+    QUnit.test("Возвращает пустой объект при массиве, содержащем не строку", async function(assert) {
+        window.fetch = createMockFetch();
+
+        const result = await fetchAndMergeData(['https://example.com', 123]);
+        assert.deepEqual(result, {}, "Должно правильно обрабатывать некорректные входные данные");
+        assert.deepEqual(window.fetch.calls, [], "fetch не должен вызываться ни для одного URL");
     });
 
     QUnit.test("Работает правильно при ошибках fetch", async function(assert) {

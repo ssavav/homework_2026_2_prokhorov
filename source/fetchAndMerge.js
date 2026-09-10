@@ -4,6 +4,7 @@
  * Функция, которая принимает массив URL-адресов, загружает данные с этих адресов, 
  * и возвращает объединенный объект, содержащий все уникальные ключи из загруженных данных.
  * При одном неуспещном запросе функция возвращает пустой объект.
+ * Значения для каждого ключа собираются без повторений.
  * @param {Array<string>} urls - массив URL-адресов
  * 
  * @example
@@ -26,7 +27,7 @@ const fetchAndMergeData = async (urls) => {
         return {};
     }
 
-    const result = {};
+    const merged = new Map();
 
     try {
         const responses = await Promise.all(
@@ -43,20 +44,18 @@ const fetchAndMergeData = async (urls) => {
 
         jsonResponses.forEach(jsonResponse => {
             Object.entries(jsonResponse).forEach(([key, value]) => {
-                if (!Object.hasOwn(result, key)) {
-                    result[key] = new Set();
+                if (!merged.has(key)) {
+                    merged.set(key, new Set());
                 }
 
-                result[key].add(value);
+                merged.get(key).add(value);
             });
         });
     } catch (error) {
         return {};
     }
 
-    Object.entries(result).forEach(([key, values]) => {
-        result[key] = Array.from(values);
-    });
-
-    return result;
+    return Object.fromEntries(
+        Array.from(merged, ([key, values]) => [key, Array.from(values)])
+    );
 }
